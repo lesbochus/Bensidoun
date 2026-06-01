@@ -1,0 +1,1628 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
+<meta name="apple-mobile-web-app-title" content="QR Marchés"/>
+<meta name="theme-color" content="#1a1916"/>
+<title>QR Commerçants — Contrôle Marchés</title>
+<!-- v2.1 -->
+<!-- Supabase SDK -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- SheetJS for Excel export -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<!-- jsQR for camera scanning -->
+<script src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js"></script>
+<style>
+:root{
+  --bg:#f7f6f3;--surface:#fff;--border:#e2e0d8;--border-strong:#c8c5ba;
+  --text:#1a1916;--text-s:#6b6860;--text-h:#a09e99;
+  --green-bg:#eaf3de;--green-t:#27500a;--green-b:#c0dd97;
+  --red-bg:#fcebeb;--red-t:#791f1f;--red-b:#f09595;
+  --amber-bg:#faeeda;--amber-t:#854f0b;--amber-b:#fac775;
+  --blue-bg:#e6f1fb;--blue-t:#185fa5;--blue-b:#85b7eb;
+  --purple-bg:#eeedfe;--purple-t:#3c3489;
+  --r:12px;--rl:16px;
+  --sh:0 1px 3px rgba(0,0,0,.07),0 1px 2px rgba(0,0,0,.04);
+  --shm:0 4px 12px rgba(0,0,0,.08),0 1px 4px rgba(0,0,0,.05);
+  --tab-h:64px;
+  --safe-b:env(safe-area-inset-bottom,0px);
+  --safe-t:env(safe-area-inset-top,0px);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+html,body{height:100%;overscroll-behavior:none}
+body{font-family:-apple-system,BlinkMacSystemFont,'SF Pro Text','Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased}
+
+/* CONFIG SCREEN */
+.config-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:2rem 1.25rem;background:var(--bg)}
+.config-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shm);padding:2rem 1.75rem;width:100%;max-width:520px}
+.config-title{font-size:20px;font-weight:700;margin-bottom:6px;letter-spacing:-.3px}
+.config-sub{font-size:13px;color:var(--text-s);margin-bottom:1.5rem}
+.config-step{display:flex;gap:10px;margin-bottom:1.25rem;padding:12px;background:var(--bg);border-radius:var(--r);border:1px solid var(--border)}
+.config-step-num{width:24px;height:24px;border-radius:50%;background:var(--text);color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0;margin-top:1px}
+.config-step-body{flex:1}
+.config-step-title{font-size:13px;font-weight:600;margin-bottom:4px}
+.config-step-desc{font-size:12px;color:var(--text-s);line-height:1.4}
+.config-step a{color:var(--blue-t);text-decoration:none;font-weight:600}
+code{background:var(--bg);border:1px solid var(--border);border-radius:5px;padding:1px 6px;font-size:12px;font-family:monospace;color:var(--text)}
+
+/* LOGIN */
+.login-wrap{min-height:100vh;min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:max(1.5rem,var(--safe-t)) 1.25rem max(1.5rem,var(--safe-b));background:var(--bg)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;box-shadow:var(--shm);padding:2rem 1.75rem;width:100%;max-width:400px}
+.login-icon{width:56px;height:56px;background:var(--text);border-radius:14px;display:flex;align-items:center;justify-content:center;margin-bottom:1.25rem}
+.login-icon svg{color:#fff}
+.login-title{font-size:24px;font-weight:700;margin-bottom:4px;letter-spacing:-.4px}
+.login-sub{font-size:14px;color:var(--text-s);margin-bottom:1.75rem}
+
+/* APP */
+.app{display:none;height:100vh;height:100dvh;flex-direction:column;overflow:hidden}
+.app.visible{display:flex}
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 1.25rem;padding-top:var(--safe-t);display:flex;align-items:center;justify-content:space-between;min-height:calc(52px + var(--safe-t));flex-shrink:0;gap:.5rem}
+.topbar-brand{font-size:17px;font-weight:700;letter-spacing:-.3px;display:flex;align-items:center;gap:8px}
+.brand-dot{width:8px;height:8px;border-radius:50%;background:var(--text)}
+.topbar-right{display:flex;align-items:center;gap:6px}
+.user-chip{font-size:12px;font-weight:600;padding:4px 10px;background:var(--bg);border:1px solid var(--border);border-radius:99px;color:var(--text-s);display:flex;align-items:center;gap:5px}
+.user-role-chip{font-size:10px;font-weight:700;padding:2px 7px;border-radius:99px}
+.role-admin{background:var(--purple-bg);color:var(--purple-t)}
+.role-placier{background:var(--blue-bg);color:var(--blue-t)}
+.role-lecteur{background:var(--green-bg);color:var(--green-t)}
+.role-agent_ville{background:#fff3e0;color:#e65100}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#ccc;flex-shrink:0;transition:background .3s}
+.sync-dot.ok{background:#4caf50}
+.sync-dot.err{background:#f44336}
+.sync-dot.loading{background:var(--amber-t);animation:pulse 1s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.logout-btn{padding:6px 12px;font-size:12px;border:1px solid var(--border);border-radius:10px;background:none;color:var(--text-s);cursor:pointer;font-family:inherit;min-height:36px}
+
+.scroll-area{flex:1;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;padding:1.25rem 1rem calc(var(--tab-h) + var(--safe-b) + 1.25rem);max-width:700px;width:100%;margin:0 auto}
+
+/* TAB BAR */
+.tab-bar{position:fixed;bottom:0;left:0;right:0;height:calc(var(--tab-h) + var(--safe-b));background:rgba(255,255,255,.92);backdrop-filter:blur(20px);-webkit-backdrop-filter:blur(20px);border-top:1px solid var(--border);display:flex;align-items:flex-start;justify-content:space-around;padding-top:6px;padding-bottom:var(--safe-b);z-index:100;flex-shrink:0}
+.tab-item{display:flex;flex-direction:column;align-items:center;gap:3px;flex:1;padding:4px 4px 0;cursor:pointer;background:none;border:none;color:var(--text-h);font-family:inherit;font-size:10px;font-weight:500;min-width:44px;min-height:44px;transition:color .15s}
+.tab-item.active{color:var(--text)}
+.tab-icon{width:26px;height:26px;border-radius:8px;display:flex;align-items:center;justify-content:center;transition:background .15s}
+.tab-item.active .tab-icon{background:var(--bg)}
+.tab-scan-btn{width:52px;height:52px;border-radius:16px;background:var(--text);color:#fff;display:flex;align-items:center;justify-content:center;margin-top:-10px;box-shadow:0 4px 14px rgba(26,25,22,.35);flex-shrink:0;transition:transform .1s,opacity .1s}
+.tab-scan-btn:active{transform:scale(.94);opacity:.85}
+.section{display:none}
+.section.active{display:block}
+
+/* FORM */
+.form-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);padding:1.25rem;margin-bottom:1rem}
+.form-section-title{font-size:12px;font-weight:700;margin-bottom:.9rem;text-transform:uppercase;letter-spacing:.06em;color:var(--text-s)}
+.grid1{display:grid;grid-template-columns:1fr;gap:10px;margin-bottom:10px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:10px}
+@media(max-width:500px){.grid2,.grid3{grid-template-columns:1fr}}
+.field label{display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--text-s);margin-bottom:5px}
+.field .optional{font-size:10px;font-weight:400;color:var(--text-h);text-transform:none;letter-spacing:0;margin-left:3px}
+.field input,.field select{width:100%;padding:12px 13px;font-size:15px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;transition:border-color .12s;appearance:none;-webkit-appearance:none;min-height:46px}
+.field input:focus,.field select:focus{outline:none;border-color:var(--text);box-shadow:0 0 0 3px rgba(26,25,22,.07)}
+.field input::placeholder{color:var(--text-h)}
+.divider{height:1px;background:var(--border);margin:1rem 0}
+.form-actions{display:flex;gap:8px;flex-wrap:wrap}
+.alert-box{padding:10px 13px;border-radius:var(--r);font-size:13px;margin-bottom:.75rem;display:flex;align-items:flex-start;gap:8px}
+.alert-box.warn{background:var(--amber-bg);color:var(--amber-t);border:1px solid var(--amber-b)}
+.alert-box.success{background:var(--green-bg);color:var(--green-t);border:1px solid var(--green-b)}
+.alert-box.info{background:var(--blue-bg);color:var(--blue-t);border:1px solid var(--blue-b)}
+.alert-box.err{background:var(--red-bg);color:var(--red-t);border:1px solid var(--red-b)}
+
+/* BUTTONS */
+.btn{padding:11px 18px;font-size:14px;font-weight:600;border-radius:var(--r);border:1px solid var(--border);background:var(--surface);color:var(--text);cursor:pointer;font-family:inherit;transition:all .12s;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;min-height:44px}
+.btn:active{transform:scale(.97);opacity:.85}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.btn.primary{background:var(--text);color:#fff;border-color:var(--text)}
+.btn.danger{color:var(--red-t);border-color:var(--red-b)}
+.btn.danger:active{background:var(--red-bg)}
+.btn.sm{padding:8px 13px;font-size:13px;min-height:38px}
+.btn.xs{padding:6px 10px;font-size:12px;min-height:32px}
+.btn.green{color:var(--green-t);border-color:var(--green-b)}
+.btn.green:active{background:var(--green-bg)}
+.btn.blue{color:var(--blue-t);border-color:var(--blue-b)}
+.btn.full{width:100%;justify-content:center}
+
+/* LIST */
+.list-header{display:flex;align-items:center;gap:.6rem;margin-bottom:.9rem;flex-wrap:wrap}
+.search-wrap{position:relative;flex:1;min-width:140px}
+.search-wrap svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text-h);pointer-events:none}
+.search-wrap input{width:100%;padding:10px 11px 10px 34px;font-size:14px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);color:var(--text);font-family:inherit;min-height:42px}
+.cards-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:600px){.cards-grid{grid-template-columns:repeat(auto-fill,minmax(280px,1fr))}}
+.merchant-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);overflow:hidden}
+.card-head{padding:.9rem 1rem .65rem;display:flex;justify-content:space-between;align-items:flex-start;gap:7px}
+.card-name{font-size:15px;font-weight:700}
+.card-sub{font-size:12px;color:var(--text-s);margin-top:2px}
+.badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;white-space:nowrap;flex-shrink:0}
+.badge.ok{background:var(--green-bg);color:var(--green-t);border:1px solid var(--green-b)}
+.badge.suspended{background:var(--red-bg);color:var(--red-t);border:1px solid var(--red-b)}
+.card-body{padding:0 1rem .65rem;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:start}
+.card-info{display:flex;flex-direction:column;gap:4px}
+.info-line{font-size:12px;color:var(--text-s);display:flex;gap:4px}
+.info-line strong{color:var(--text);font-weight:600}
+.qr-block{display:flex;flex-direction:column;align-items:center;gap:4px}
+.qr-block img{width:86px;height:86px;border-radius:8px;border:1px solid var(--border);background:#fff;display:block}
+.qr-code-txt{font-size:9px;color:var(--text-h);text-align:center;word-break:break-all;max-width:86px}
+.card-footer{padding:.65rem 1rem;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;gap:5px;flex-wrap:wrap;background:#fafafa}
+.card-footer-actions{display:flex;gap:5px;flex-wrap:wrap}
+.dl-status{font-size:11px;color:var(--green-t);font-weight:500}
+/* ── PHOTOS ── */
+.photo-upload-area{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px}
+.photo-slot{border:2px dashed var(--border);border-radius:var(--r);aspect-ratio:4/3;display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;position:relative;overflow:hidden;background:var(--bg);transition:border-color .15s}
+.photo-slot:hover{border-color:var(--border-strong)}
+.photo-slot img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:calc(var(--r) - 2px)}
+.photo-slot-label{font-size:11px;color:var(--text-h);margin-top:6px;text-align:center}
+.photo-slot input[type=file]{position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%}
+.photo-delete{position:absolute;top:6px;right:6px;width:24px;height:24px;border-radius:50%;background:rgba(0,0,0,.6);color:#fff;border:none;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center;z-index:2}
+.card-photos{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:0 1rem .65rem}
+.card-photo{aspect-ratio:4/3;border-radius:8px;overflow:hidden;background:var(--bg);border:1px solid var(--border)}
+.card-photo img{width:100%;height:100%;object-fit:cover;display:block}
+
+.empty-state{text-align:center;padding:3rem 1rem;color:var(--text-s)}
+.empty-icon{font-size:40px;margin-bottom:10px;opacity:.3}
+.empty-state h3{font-size:16px;color:var(--text);margin-bottom:5px}
+
+/* SCAN */
+.scan-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);padding:1.25rem}
+.scan-result{margin-top:1rem;border-radius:var(--rl);border:1px solid var(--border);overflow:hidden}
+.scan-result-head{padding:.9rem 1.1rem;display:flex;justify-content:space-between;align-items:center;gap:7px}
+.scan-result-head.ok{background:var(--green-bg);border-bottom:1px solid var(--green-b)}
+.scan-result-head.bad{background:var(--red-bg);border-bottom:1px solid var(--red-b)}
+.scan-result-head.notfound{background:var(--amber-bg);border-bottom:1px solid var(--amber-b)}
+.scan-result-name{font-size:18px;font-weight:700}
+.scan-result-body{padding:.9rem 1.1rem;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.scan-field{font-size:13px}
+.scan-field span{display:block;font-size:10px;color:var(--text-s);margin-bottom:1px;font-weight:600;text-transform:uppercase;letter-spacing:.04em}
+
+/* CAMERA */
+.camera-wrap{position:relative;background:#000;border-radius:var(--r);overflow:hidden;margin:1rem 0;width:100%;aspect-ratio:3/4;max-height:70vh}
+.camera-wrap video{width:100%;height:100%;object-fit:cover;display:block}
+.camera-overlay{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+.scan-frame{width:220px;height:220px;border:2px solid rgba(255,255,255,.7);border-radius:16px;box-shadow:0 0 0 9999px rgba(0,0,0,.5);position:relative}
+.scan-corner{position:absolute;width:32px;height:32px;border-color:#fff;border-style:solid;border-width:0}
+.scan-corner.tl{top:0;left:0;border-top-width:3px;border-left-width:3px;border-radius:8px 0 0 0}
+.scan-corner.tr{top:0;right:0;border-top-width:3px;border-right-width:3px;border-radius:0 8px 0 0}
+.scan-corner.bl{bottom:0;left:0;border-bottom-width:3px;border-left-width:3px;border-radius:0 0 0 8px}
+.scan-corner.br{bottom:0;right:0;border-bottom-width:3px;border-right-width:3px;border-radius:0 0 8px 0}
+.scan-line{position:absolute;left:0;right:0;height:2px;background:linear-gradient(90deg,transparent,rgba(255,200,0,.9),transparent);animation:scanline 2s ease-in-out infinite}
+@keyframes scanline{0%{top:0}50%{top:calc(100% - 2px)}100%{top:0}}
+.camera-hint{position:absolute;bottom:16px;left:50%;transform:translateX(-50%);background:rgba(0,0,0,.6);color:#fff;font-size:12px;padding:6px 14px;border-radius:99px;white-space:nowrap}
+.camera-status{text-align:center;font-size:13px;color:var(--text-s);margin-top:6px}
+
+/* USERS */
+.users-grid{display:grid;grid-template-columns:1fr;gap:10px}
+@media(min-width:600px){.users-grid{grid-template-columns:repeat(auto-fill,minmax(260px,1fr))}}
+.user-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);padding:1rem}
+.user-card-head{display:flex;align-items:center;gap:10px;margin-bottom:.75rem}
+.user-avatar{width:44px;height:44px;border-radius:50%;background:var(--bg);border:1px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:var(--text-s);flex-shrink:0}
+.user-name{font-size:14px;font-weight:600}
+.user-email{font-size:12px;color:var(--text-s)}
+.user-meta{font-size:11px;color:var(--text-h);margin-top:1px}
+.user-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:.75rem;padding-top:.75rem;border-top:1px solid var(--border)}
+.user-status-chip{font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px}
+.status-active{background:var(--green-bg);color:var(--green-t)}
+.status-suspended{background:var(--red-bg);color:var(--red-t)}
+
+/* MODAL */
+.modal-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:flex-end;justify-content:center;padding:0}
+.modal-backdrop.open{display:flex}
+@media(min-width:600px){.modal-backdrop{align-items:center;padding:1rem}.modal{border-radius:var(--rl)!important;max-width:480px}}
+.modal{background:var(--surface);border-radius:20px 20px 0 0;padding:1.5rem 1.25rem;padding-bottom:calc(1.5rem + var(--safe-b));width:100%;max-height:90vh;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.modal-handle{width:40px;height:4px;background:var(--border);border-radius:99px;margin:0 auto 1.25rem}
+.modal-title{font-size:17px;font-weight:700;margin-bottom:1.25rem;display:flex;align-items:center;justify-content:space-between}
+.modal-close{background:none;border:none;cursor:pointer;color:var(--text-s);font-size:20px;padding:4px;line-height:1;min-width:32px;min-height:32px}
+.modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:1.25rem}
+
+/* SETTINGS */
+.settings-section{background:var(--surface);border:1px solid var(--border);border-radius:var(--rl);box-shadow:var(--sh);padding:1.25rem;margin-bottom:1rem}
+.settings-title{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.9rem;color:var(--text-s)}
+.page-title{font-size:20px;font-weight:700;letter-spacing:-.3px;margin-bottom:1rem}
+
+/* LOADING OVERLAY */
+.loading-overlay{position:fixed;inset:0;background:rgba(247,246,243,.9);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:500;font-size:14px;color:var(--text-s)}
+.spinner{width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--text);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+#export-canvas{display:none}
+</style>
+</head>
+<body>
+
+<!-- ══ CONFIGURATION SCREEN ══ -->
+<div id="config-screen" class="config-wrap" style="display:none">
+  <div class="config-card">
+    <div style="font-size:32px;margin-bottom:12px">⚙️</div>
+    <div class="config-title">Configuration Supabase</div>
+    <div class="config-sub">Entrez vos clés Supabase pour connecter l'application à la base de données partagée.</div>
+
+    <div class="config-step">
+      <div class="config-step-num">1</div>
+      <div class="config-step-body">
+        <div class="config-step-title">Créer un compte gratuit</div>
+        <div class="config-step-desc">Allez sur <a href="https://supabase.com" target="_blank">supabase.com</a> → <strong>Start for free</strong> → créez un projet nommé <code>qr-marches</code>.</div>
+      </div>
+    </div>
+
+    <div class="config-step">
+      <div class="config-step-num">2</div>
+      <div class="config-step-body">
+        <div class="config-step-title">Créer les tables SQL</div>
+        <div class="config-step-desc">Dans votre projet → <strong>SQL Editor</strong> → collez et exécutez le SQL ci-dessous :</div>
+        <div style="background:#1a1916;color:#e8e6e0;border-radius:8px;padding:10px 12px;margin-top:8px;font-size:11px;font-family:monospace;white-space:pre;overflow-x:auto;line-height:1.6">create table users (
+  id uuid primary key default gen_random_uuid(),
+  nom text not null,
+  email text unique not null,
+  password text not null,
+  role text default 'placier',
+  status text default 'active',
+  created_at timestamptz default now()
+);
+create table merchants (
+  id text primary key,
+  qr_data text,
+  nom_commercial text not null,
+  responsable text not null,
+  siret text not null,
+  numero_carte text,
+  activite text,
+  telephone text,
+  email text,
+  ville text,
+  marche text,
+  emplacement text,
+  validite text,
+  statut text default 'autorise',
+  created_at timestamptz default now(),
+  created_by text
+);
+-- Désactiver RLS pour usage simple
+alter table users disable row level security;
+alter table merchants disable row level security;
+-- Admin par défaut
+insert into users (nom,email,password,role)
+values ('Administrateur','admin@marche.fr','Admin1234','admin');</div>
+      </div>
+    </div>
+
+    <div class="config-step">
+      <div class="config-step-num">3</div>
+      <div class="config-step-body">
+        <div class="config-step-title">Copier vos clés</div>
+        <div class="config-step-desc">Dans votre projet → <strong>Settings → API</strong> → copiez <strong>Project URL</strong> et <strong>anon public key</strong>.</div>
+      </div>
+    </div>
+
+    <div class="field" style="margin-bottom:10px">
+      <label>Project URL</label>
+      <input id="cfg-url" placeholder="https://xxxxxxxxxxxx.supabase.co" autocapitalize="none"/>
+    </div>
+    <div class="field" style="margin-bottom:10px">
+      <label>Anon Public Key</label>
+      <input id="cfg-key" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..." autocapitalize="none"/>
+    </div>
+    <div id="cfg-err" class="alert-box err" style="display:none"></div>
+    <button class="btn primary full" onclick="saveConfig()" id="cfg-btn">Connecter l'application</button>
+    <p style="font-size:11px;color:var(--text-h);margin-top:10px;text-align:center">Ces clés sont sauvegardées localement sur cet appareil.</p>
+  </div>
+</div>
+
+<!-- ══ LOGIN ══ -->
+<div class="login-wrap" id="login-screen" style="display:none">
+  <div class="login-card">
+    <div class="login-icon">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    </div>
+    <div class="login-title">Contrôle Marchés</div>
+    <div class="login-sub">Accès réservé aux agents autorisés.</div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Email</label>
+      <input type="email" id="login-email" placeholder="votre@email.fr" autocomplete="email" autocapitalize="none"/>
+    </div>
+    <div class="field" style="margin-bottom:12px">
+      <label>Mot de passe</label>
+      <input type="password" id="login-pass" placeholder="••••••••" autocomplete="current-password"/>
+    </div>
+    <div id="login-err" class="alert-box err" style="display:none">Identifiants incorrects ou accès suspendu.</div>
+    <button class="btn primary full" onclick="login()" style="margin-top:4px">Se connecter</button>
+    
+  </div>
+</div>
+
+<!-- ══ APP ══ -->
+<div class="app" id="app">
+  <div class="topbar">
+    <div class="topbar-brand"><div class="brand-dot"></div>QR Marchés</div>
+    <div class="topbar-right">
+      <div class="sync-dot" id="sync-dot" title="État de la connexion"></div>
+      <div class="user-chip" id="user-chip">
+        <span id="chip-name">—</span>
+        <span class="user-role-chip" id="chip-role">—</span>
+      </div>
+      <button class="logout-btn" onclick="logout()">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+      </button>
+    </div>
+  </div>
+
+  <div class="scroll-area" id="scroll-area">
+
+    <!-- CREATE -->
+    <div class="section active" id="sec-create">
+      <div class="page-title">Nouvelle fiche</div>
+      <div class="form-card">
+        <div class="form-section-title">Commerçant</div>
+        <div class="grid2">
+          <div class="field"><label>Prénom du responsable *</label><input id="f-prenom" placeholder="Ex : Jean" autocapitalize="words"/></div>
+          <div class="field"><label>Nom du responsable *</label><input id="f-resp" placeholder="Ex : Dupont" autocapitalize="words"/></div>
+        </div>
+        <div class="field" style="margin-bottom:10px"><label>Nom commercial <span class="optional">facultatif</span></label><input id="f-nom" placeholder="Ex : Boulangerie Martin" autocapitalize="words"/></div>
+        <div class="grid2">
+          <div class="field"><label>SIRET *</label><input id="f-siret" placeholder="14 chiffres" inputmode="numeric" maxlength="14"/></div>
+          <div class="field"><label>N° carte <span class="optional">facultatif</span></label><input id="f-carte" placeholder="CARTE-001"/></div>
+        </div>
+        <div class="grid2">
+          <div class="field"><label>Activité</label><input id="f-act" placeholder="Boulangerie" autocapitalize="sentences"/></div>
+          <div class="field"><label>Téléphone</label><input id="f-tel" placeholder="06 00 00 00 00" inputmode="tel"/></div>
+        </div>
+      </div>
+      <div class="form-card">
+        <div class="form-section-title">Emplacement</div>
+        <div class="grid2">
+          <div class="field"><label>Ville</label><input id="f-ville" placeholder="Paris" autocapitalize="words"/></div>
+          <div class="field"><label>Marché</label><input id="f-marche" placeholder="Marché d'Aligre" autocapitalize="words"/></div>
+        </div>
+        <div class="field" style="margin-bottom:10px"><label>Emplacement</label><input id="f-empl" placeholder="Allée A — Stand 12"/></div>
+      </div>
+      <div class="form-card">
+        <div class="form-section-title">Contact &amp; validité</div>
+        <div class="grid2">
+          <div class="field"><label>Email</label><input id="f-email" placeholder="contact@..." inputmode="email" autocapitalize="none"/></div>
+          <div class="field"><label>Validité de la carte</label><input id="f-valid" type="date"/></div>
+        </div>
+        <div class="field" style="margin-bottom:0"><label>Statut</label>
+          <select id="f-statut"><option value="autorise">✓ Autorisé</option><option value="suspendu">✗ Suspendu</option></select>
+        </div>
+      </div>
+      <div class="form-card">
+        <div class="form-section-title">Photos <span style="font-size:10px;font-weight:400;color:var(--text-h);text-transform:none;letter-spacing:0">facultatif — 2 max</span></div>
+        <div class="photo-upload-area">
+          <div class="photo-slot" id="slot-1">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-h);pointer-events:none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <div class="photo-slot-label" style="pointer-events:none">Photo 1</div>
+            <div style="display:flex;gap:6px;margin-top:8px;pointer-events:none">
+              <span style="font-size:10px;color:var(--text-h)">📷 Appareil ou bibliothèque</span>
+            </div>
+            <input type="file" id="f-photo1" accept="image/*" onchange="previewPhoto(1,this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:3"/>
+          </div>
+          <div class="photo-slot" id="slot-2">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-h);pointer-events:none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+            <div class="photo-slot-label" style="pointer-events:none">Photo 2</div>
+            <div style="display:flex;gap:6px;margin-top:8px;pointer-events:none">
+              <span style="font-size:10px;color:var(--text-h)">📷 Appareil ou bibliothèque</span>
+            </div>
+            <input type="file" id="f-photo2" accept="image/*" onchange="previewPhoto(2,this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:3"/>
+          </div>
+        </div>
+      </div>
+      <div id="form-alert" class="alert-box warn" style="display:none"></div>
+      <div id="form-success" class="alert-box success" style="display:none">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        Fiche enregistrée et synchronisée !
+      </div>
+      <div class="form-actions">
+        <button class="btn primary" id="btn-save" onclick="createMerchant()">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/></svg>
+          Enregistrer &amp; générer QR
+        </button>
+        <button class="btn" onclick="clearForm()">Effacer</button>
+      </div>
+    </div>
+
+    <!-- LIST -->
+    <div class="section" id="sec-list">
+      <div class="list-header">
+        <div class="search-wrap">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input id="search-input" placeholder="Nom, SIRET, ville…" oninput="renderList()"/>
+        </div>
+        <button class="btn sm" onclick="loadMerchants()">↻</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:.9rem;flex-wrap:wrap;align-items:center">
+        <button class="btn sm blue" onclick="exportExcel()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>Exporter Excel
+        </button>
+        <button class="btn sm" onclick="document.getElementById('import-excel-input').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 5 17 10"/><line x1="12" y1="5" x2="12" y2="17"/></svg>Importer Excel
+        </button>
+        <input type="file" id="import-excel-input" accept=".xlsx,.xls,.csv" style="display:none" onchange="importExcel(this)"/>
+        <button class="btn sm green" onclick="exportAllJpg()" id="export-all-btn">↓ Tous QR JPG</button>
+      </div>
+      <div id="import-result" style="display:none;margin-bottom:.75rem"></div>
+      <div id="list-container"></div>
+    </div>
+
+    <!-- SCAN -->
+    <div class="section" id="sec-scan">
+      <div class="page-title">Scanner</div>
+      <div class="scan-card">
+        <div style="display:flex;gap:8px;margin-bottom:1rem">
+          <button class="btn primary sm" id="btn-start-cam" onclick="startCamera()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M23 7l-7 5 7 5V7z"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+            Activer la caméra
+          </button>
+          <button class="btn sm danger" id="btn-stop-cam" onclick="stopCamera()" style="display:none">Arrêter</button>
+        </div>
+        <div class="camera-wrap" id="camera-wrap" style="display:none">
+          <video id="cam-video" autoplay playsinline muted></video>
+          <div class="camera-overlay">
+            <div class="scan-frame">
+              <div class="scan-corner tl"></div><div class="scan-corner tr"></div>
+              <div class="scan-corner bl"></div><div class="scan-corner br"></div>
+              <div class="scan-line"></div>
+            </div>
+          </div>
+          <div class="camera-hint">Pointez vers le QR code</div>
+        </div>
+        <div class="camera-status" id="cam-status"></div>
+        <div class="divider"></div>
+        <div class="field">
+          <label>Saisie manuelle — ID / SIRET / N° carte</label>
+          <input id="scan-input" placeholder="COM-123456…" oninput="doScan()" autocapitalize="none"/>
+        </div>
+        <div id="scan-result-area"></div>
+      </div>
+    </div>
+
+    <!-- USERS -->
+    <div class="section" id="sec-users">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:1rem;flex-wrap:wrap;gap:.5rem">
+        <div class="page-title" style="margin-bottom:0">Utilisateurs</div>
+        <button class="btn primary sm" onclick="openUserModal()">+ Ajouter</button>
+      </div>
+      <div class="alert-box info" style="margin-bottom:1rem">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+        <span><strong>Admin</strong> : accès complet + gestion des agents · <strong>Placier</strong> : créer/modifier des fiches · <strong>Agent Ville</strong> : scan uniquement · <strong>Lecteur</strong> : scan uniquement</span>
+      </div>
+      <div id="users-container"></div>
+    </div>
+
+    <!-- SETTINGS -->
+    <div class="section" id="sec-settings">
+      <div class="page-title">Paramètres</div>
+      <div class="settings-section">
+        <div class="settings-title">Mon compte</div>
+        <div class="grid2">
+          <div class="field"><label>Nom</label><input id="set-nom" autocapitalize="words"/></div>
+          <div class="field"><label>Email</label><input id="set-email" type="email" autocapitalize="none"/></div>
+        </div>
+      </div>
+      <div class="settings-section">
+        <div class="settings-title">Changer le mot de passe</div>
+        <div class="grid1">
+          <div class="field"><label>Mot de passe actuel</label><input id="set-pass-old" type="password"/></div>
+          <div class="field"><label>Nouveau mot de passe</label><input id="set-pass-new" type="password"/></div>
+          <div class="field"><label>Confirmation</label><input id="set-pass-confirm" type="password"/></div>
+        </div>
+      </div>
+      <div id="settings-msg" class="alert-box" style="display:none"></div>
+      <button class="btn primary" onclick="saveSettings()">Enregistrer</button>
+    </div>
+
+  </div>
+
+  <!-- TAB BAR -->
+  <div class="tab-bar">
+    <button class="tab-item active" id="tab-create" onclick="showTab('create')">
+      <div class="tab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg></div>Créer
+    </button>
+    <button class="tab-item" id="tab-list" onclick="showTab('list')">
+      <div class="tab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg></div>Fiches
+    </button>
+    <button class="tab-item" id="tab-scan" onclick="showTab('scan')">
+      <div class="tab-scan-btn"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><line x1="7" y1="12" x2="17" y2="12"/></svg></div>Scanner
+    </button>
+    <button class="tab-item" id="tab-users" onclick="showTab('users')" style="display:none">
+      <div class="tab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>Agents
+    </button>
+    <button class="tab-item" id="tab-settings" onclick="showTab('settings')">
+      <div class="tab-icon"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></div>Réglages
+    </button>
+  </div>
+</div>
+
+<!-- MODAL UTILISATEUR -->
+<div class="modal-backdrop" id="user-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span id="modal-title-txt">Ajouter un utilisateur</span>
+      <button class="modal-close" onclick="closeUserModal()">✕</button>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Prénom Nom *</label><input id="mu-nom" autocapitalize="words"/></div>
+      <div class="field"><label>Email *</label><input id="mu-email" type="email" autocapitalize="none"/></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Mot de passe *</label><input id="mu-pass" type="password"/></div>
+      <div class="field"><label>Rôle</label>
+        <select id="mu-role"><option value="agent_ville">Agent Ville</option><option value="placier">Placier</option><option value="lecteur">Lecteur</option><option value="admin">Administrateur</option></select>
+      </div>
+    </div>
+    <div class="field"><label>Statut</label>
+      <select id="mu-status"><option value="active">Actif</option><option value="suspended">Suspendu</option></select>
+    </div>
+    <div id="modal-err" class="alert-box err" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeUserModal()">Annuler</button>
+      <button class="btn primary" onclick="saveUser()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+
+
+
+<!-- MODAL IMPORT EXCEL -->
+<div class="modal-backdrop" id="import-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span>Importer depuis Excel</span>
+      <button class="modal-close" onclick="closeImportModal()">✕</button>
+    </div>
+    <div class="alert-box info" style="margin-bottom:1rem">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      <span>Associez chaque colonne de votre fichier aux champs de l'application. Seuls <strong>Prénom</strong> et <strong>Nom</strong> sont obligatoires.</span>
+    </div>
+    <div id="import-preview" style="margin-bottom:1rem;font-size:12px;color:var(--text-s)"></div>
+    <div id="import-mapping"></div>
+    <div id="import-modal-err" class="alert-box err" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeImportModal()">Annuler</button>
+      <button class="btn primary" id="import-confirm-btn" onclick="confirmImport()">Importer</button>
+    </div>
+  </div>
+</div>
+<!-- MODAL MODIFIER FICHE COMMERÇANT -->
+<div class="modal-backdrop" id="merchant-modal">
+  <div class="modal">
+    <div class="modal-handle"></div>
+    <div class="modal-title">
+      <span>Modifier la fiche</span>
+      <button class="modal-close" onclick="closeMerchantModal()">✕</button>
+    </div>
+    <input type="hidden" id="mm-id"/>
+    <div class="form-section-title" style="margin-bottom:.75rem">Responsable</div>
+    <div class="grid2">
+      <div class="field"><label>Prénom *</label><input id="mm-prenom" autocapitalize="words"/></div>
+      <div class="field"><label>Nom *</label><input id="mm-resp" autocapitalize="words"/></div>
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>Nom commercial <span class="optional">facultatif</span></label><input id="mm-nom" autocapitalize="words"/></div>
+    <div class="grid2">
+      <div class="field"><label>SIRET *</label><input id="mm-siret" inputmode="numeric" maxlength="14"/></div>
+      <div class="field"><label>N° carte <span class="optional">facultatif</span></label><input id="mm-carte"/></div>
+    </div>
+    <div class="grid2">
+      <div class="field"><label>Activité</label><input id="mm-act" autocapitalize="sentences"/></div>
+      <div class="field"><label>Téléphone</label><input id="mm-tel" inputmode="tel"/></div>
+    </div>
+    <div class="divider"></div>
+    <div class="form-section-title" style="margin-bottom:.75rem">Emplacement</div>
+    <div class="grid2">
+      <div class="field"><label>Ville</label><input id="mm-ville" autocapitalize="words"/></div>
+      <div class="field"><label>Marché</label><input id="mm-marche" autocapitalize="words"/></div>
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>Emplacement</label><input id="mm-empl"/></div>
+    <div class="divider"></div>
+    <div class="grid2">
+      <div class="field"><label>Email</label><input id="mm-email" type="email" autocapitalize="none"/></div>
+      <div class="field"><label>Validité de la carte</label><input id="mm-valid" type="date"/></div>
+    </div>
+    <div class="field" style="margin-bottom:10px"><label>Statut</label>
+      <select id="mm-statut"><option value="autorise">✓ Autorisé</option><option value="suspendu">✗ Suspendu</option></select>
+    </div>
+    <div class="divider"></div>
+    <div class="form-section-title" style="margin-bottom:.75rem">Photos <span style="font-size:10px;font-weight:400;color:var(--text-h);text-transform:none;letter-spacing:0">facultatif</span></div>
+    <div class="photo-upload-area">
+      <div class="photo-slot" id="mm-slot-1">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-h);pointer-events:none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <div class="photo-slot-label" style="pointer-events:none">Photo 1</div>
+        <input type="file" id="mm-photo1" accept="image/*" onchange="previewModalPhoto(1,this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:3"/>
+      </div>
+      <div class="photo-slot" id="mm-slot-2">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-h);pointer-events:none"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+        <div class="photo-slot-label" style="pointer-events:none">Photo 2</div>
+        <input type="file" id="mm-photo2" accept="image/*" onchange="previewModalPhoto(2,this)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%;z-index:3"/>
+      </div>
+    </div>
+    <div id="mm-err" class="alert-box err" style="display:none"></div>
+    <div class="modal-actions">
+      <button class="btn danger" onclick="deleteMerchantFromModal()">Supprimer</button>
+      <button class="btn" onclick="closeMerchantModal()">Annuler</button>
+      <button class="btn primary" onclick="saveMerchant()">Enregistrer</button>
+    </div>
+  </div>
+</div>
+<!-- LOADING -->
+<div class="loading-overlay" id="loading" style="display:none">
+  <div class="spinner"></div>
+  <span id="loading-msg">Chargement…</span>
+</div>
+
+<canvas id="export-canvas" style="display:none"></canvas>
+
+<script>
+// ══════════════════════════════════════════
+//  SUPABASE INIT
+// ══════════════════════════════════════════
+// ══ CLÉS SUPABASE INTÉGRÉES ══
+const SUPA_URL = 'https://rfnmwuymlibllytjmwdu.supabase.co';
+const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InJmbm13dXltbGlibGx5dGptd2R1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODAyMzAwMzEsImV4cCI6MjA5NTgwNjAzMX0.ntMrKU-GDdnnwbqS3zs0ODZ0OhuKPlFFYlgEg_gfaqg';
+
+let sb = null;
+let currentUser = null;
+let merchants = [];
+let users = [];
+let camStream = null, camRAF = null, editingUserId = null;
+
+async function initSupabase() {
+  try {
+    sb = supabase.createClient(SUPA_URL, SUPA_KEY);
+    return true;
+  } catch { return false; }
+}
+
+// ── BOOTSTRAP ──
+async function bootstrap() {
+  showLoading('Connexion à la base de données…');
+  await initSupabase();
+  hideLoading();
+  // Check saved session
+  const sessId = localStorage.getItem('qrc_sess_id');
+  if (sessId) {
+    try {
+      const { data } = await sb.from('users').select('*').eq('id', sessId).eq('status', 'active').single();
+      if (data) { currentUser = data; showApp(); return; }
+    } catch {}
+  }
+  document.getElementById('login-screen').style.display = 'flex';
+}
+
+// ── LOADING ──
+function showLoading(msg) {
+  document.getElementById('loading-msg').textContent = msg || 'Chargement…';
+  document.getElementById('loading').style.display = 'flex';
+}
+function hideLoading() { document.getElementById('loading').style.display = 'none'; }
+
+// ── SYNC DOT ──
+function setSyncDot(state) {
+  const d = document.getElementById('sync-dot');
+  d.className = 'sync-dot ' + state;
+}
+
+// ── AUTH ──
+document.getElementById('login-pass').addEventListener('keydown', e => { if (e.key === 'Enter') login(); });
+async function login() {
+  const email = document.getElementById('login-email').value.trim().toLowerCase();
+  const pass = document.getElementById('login-pass').value;
+  const err = document.getElementById('login-err');
+  err.style.display = 'none';
+  showLoading('Connexion…');
+  try {
+    const { data, error } = await sb.from('users').select('*').eq('email', email).eq('password', pass).single();
+    hideLoading();
+    if (error || !data || data.status !== 'active') { err.style.display = 'flex'; return; }
+    currentUser = data;
+    localStorage.setItem('qrc_sess_id', data.id);
+    showApp();
+  } catch { hideLoading(); err.style.display = 'flex'; }
+}
+function logout() {
+  stopCamera();
+  localStorage.removeItem('qrc_sess_id');
+  currentUser = null; merchants = []; users = [];
+  document.getElementById('login-screen').style.display = 'flex';
+  document.getElementById('app').classList.remove('visible');
+  document.getElementById('login-email').value = '';
+  document.getElementById('login-pass').value = '';
+}
+function showApp() {
+  document.getElementById('login-screen').style.display = 'none';
+  document.getElementById('app').classList.add('visible');
+  document.getElementById('chip-name').textContent = currentUser.nom.split(' ')[0];
+  const rc = document.getElementById('chip-role');
+  rc.textContent = currentUser.role === 'admin' ? 'Admin' : currentUser.role === 'placier' ? 'Placier' : currentUser.role === 'agent_ville' ? 'Agent Ville' : 'Lecteur';
+  rc.className = 'user-role-chip role-' + currentUser.role.replace('_','-');
+  const isLecteur = currentUser.role === 'lecteur';
+  const isAdmin = currentUser.role === 'admin';
+  const isAgentVille = currentUser.role === 'agent_ville';
+  document.getElementById('tab-create').style.display = (isLecteur || isAgentVille) ? 'none' : 'flex';
+  document.getElementById('tab-list').style.display = isLecteur ? 'none' : 'flex';
+  document.getElementById('tab-users').style.display = isAdmin ? 'flex' : 'none';
+  // Hide settings tab for agent_ville
+  const settingsTab = document.getElementById('tab-settings');
+  if (settingsTab) settingsTab.style.display = currentUser.role === 'agent_ville' ? 'none' : 'flex';
+  showTab((isLecteur || isAgentVille) ? 'scan' : 'create');
+  setSyncDot('ok');
+}
+
+// ── TABS ──
+function showTab(t) {
+  // Agent Ville can only access scan and list (read-only)
+  if (currentUser && currentUser.role === 'agent_ville' && t !== 'scan' && t !== 'list') return;
+  ['create','list','scan','users','settings'].forEach(id => {
+    const s = document.getElementById('sec-' + id);
+    const tb = document.getElementById('tab-' + id);
+    if (s) s.classList.toggle('active', id === t);
+    if (tb) tb.classList.toggle('active', id === t);
+  });
+  document.getElementById('scroll-area').scrollTop = 0;
+  if (t === 'list') loadMerchants();
+  if (t === 'users') loadUsers();
+  if (t === 'settings') loadSettings();
+  if (t === 'scan') { document.getElementById('scan-input').value = ''; document.getElementById('scan-result-area').innerHTML = ''; }
+  else stopCamera();
+}
+
+// ── HELPERS ──
+function esc(s) { return String(s||'').replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function initials(n) { return (n||'?').split(' ').slice(0,2).map(w=>w[0]||'').join('').toUpperCase()||'?'; }
+function fmtDate(iso) { if(!iso) return '—'; try { return new Date(iso).toLocaleDateString('fr-FR'); } catch { return iso; } }
+function makeId() { return 'COM-' + Math.floor(100000 + Math.random() * 900000); }
+function qrUrl(v, s) { return `https://api.qrserver.com/v1/create-qr-code/?size=${s}x${s}&data=${encodeURIComponent(v)}&color=000000&bgcolor=ffffff&margin=10`; }
+
+// ── CREATE MERCHANT ──
+function clearForm() {
+  ['f-prenom','f-nom','f-resp','f-siret','f-carte','f-act','f-tel','f-ville','f-marche','f-empl','f-email','f-valid'].forEach(id => { const el = document.getElementById(id); if(el) el.value=''; });
+  document.getElementById('f-statut').value = 'autorise';
+  clearPhoto(1); clearPhoto(2);
+  document.getElementById('form-alert').style.display = 'none';
+  document.getElementById('form-success').style.display = 'none';
+}
+async function createMerchant() {
+  const nom = document.getElementById('f-nom').value.trim();
+  const prenom = document.getElementById('f-prenom').value.trim();
+  const resp = document.getElementById('f-resp').value.trim();
+  const responsable = (prenom + ' ' + resp).trim();
+  const siret = document.getElementById('f-siret').value.replace(/\D/g,'').slice(0,14);
+  const al = document.getElementById('form-alert'), ok = document.getElementById('form-success');
+  al.style.display = 'none'; ok.style.display = 'none';
+  if (!prenom || !resp) { al.style.display='flex'; al.textContent='Le prénom et le nom du responsable sont obligatoires.'; return; }
+  if (!/^\d{14}$/.test(siret)) { al.style.display='flex'; al.textContent='Le SIRET doit contenir exactement 14 chiffres.'; return; }
+  const id = makeId();
+  const qrData = `MARCHE:${id}|SIRET:${siret}`;
+  const row = {
+    id, qr_data: qrData, nom_commercial: nom, responsable: responsable, siret,
+    numero_carte: document.getElementById('f-carte').value.trim() || null,
+    activite: document.getElementById('f-act').value.trim() || null,
+    telephone: document.getElementById('f-tel').value.trim() || null,
+    ville: document.getElementById('f-ville').value.trim() || null,
+    marche: document.getElementById('f-marche').value.trim() || null,
+    emplacement: document.getElementById('f-empl').value.trim() || null,
+    email: document.getElementById('f-email').value.trim() || null,
+    validite: document.getElementById('f-valid').value || null,
+    statut: document.getElementById('f-statut').value,
+    created_by: currentUser.nom,
+    photo1: window._photo1 || null,
+    photo2: window._photo2 || null
+  };
+  const btn = document.getElementById('btn-save');
+  btn.disabled = true; setSyncDot('loading');
+  const { error } = await sb.from('merchants').insert(row);
+  btn.disabled = false;
+  if (error) { setSyncDot('err'); al.style.display='flex'; al.textContent='Erreur de sauvegarde : ' + error.message; return; }
+  setSyncDot('ok');
+  clearForm(); ok.style.display='flex';
+  setTimeout(() => { ok.style.display='none'; }, 3500);
+}
+
+// ── LOAD & RENDER MERCHANTS ──
+async function loadMerchants() {
+  setSyncDot('loading');
+  const { data, error } = await sb.from('merchants').select('*').order('created_at', { ascending: false });
+  if (error) { setSyncDot('err'); return; }
+  merchants = data || [];
+  setSyncDot('ok');
+  renderList();
+}
+function renderList() {
+  const q = (document.getElementById('search-input')?.value || '').toLowerCase().trim();
+  const filtered = q ? merchants.filter(m =>
+    [m.id, m.nom_commercial, m.responsable, m.siret, m.ville, m.marche, m.emplacement, m.activite, m.numero_carte].join(' ').toLowerCase().includes(q)
+  ) : merchants;
+  const c = document.getElementById('list-container');
+  if (!filtered.length) {
+    c.innerHTML = `<div class="empty-state"><div class="empty-icon">📋</div><h3>${merchants.length ? 'Aucun résultat' : 'Aucune fiche'}</h3><p>${merchants.length ? 'Modifiez la recherche.' : 'Créez votre première fiche.'}</p></div>`;
+    return;
+  }
+  const canEdit = currentUser.role === 'admin' || currentUser.role === 'placier';
+  c.innerHTML = `<div class="cards-grid">${filtered.map(m => `
+    <div class="merchant-card">
+      <div class="card-head">
+        <div><div class="card-name">${esc(m.nom_commercial)}</div><div class="card-sub">${esc(m.responsable)} · ${esc(m.id)}</div></div>
+        <span class="badge ${cardStatus(m).ok?'ok':'suspended'}">${cardStatus(m).reason==='expired'?'⚠️ Expirée':cardStatus(m).ok?'✓ Autorisé':'✗ Suspendu'}</span>
+      </div>
+      <div class="card-body">
+        <div class="card-info">
+          <div class="info-line"><strong>SIRET</strong>${esc(m.siret)}</div>
+          ${m.numero_carte?`<div class="info-line"><strong>Carte</strong>${esc(m.numero_carte)}</div>`:''}
+          ${m.activite?`<div class="info-line"><strong>Activité</strong>${esc(m.activite)}</div>`:''}
+          ${m.ville||m.marche?`<div class="info-line"><strong>Marché</strong>${esc([m.ville,m.marche].filter(Boolean).join(' — '))}</div>`:''}
+          ${m.emplacement?`<div class="info-line"><strong>Empl.</strong>${esc(m.emplacement)}</div>`:''}
+          ${m.telephone?`<div class="info-line"><strong>Tél</strong>${esc(m.telephone)}</div>`:''}
+          ${m.validite?`<div class="info-line"><strong>Validité carte</strong><span style="${isExpired(m.validite)?'color:var(--red-t);font-weight:700':''}">${esc(m.validite)}${isExpired(m.validite)?' ⚠️':''}</span></div>`:''}
+        </div>
+        <div class="qr-block">
+          <img src="${qrUrl(m.qr_data,120)}" alt="QR" crossorigin="anonymous"/>
+          <div class="qr-code-txt">${esc(m.id)}</div>
+        </div>
+      </div>
+      ${(m.photo1||m.photo2)?`<div class='card-photos'>${m.photo1?`<div class='card-photo'><img src='${m.photo1}'/></div>`:``}${m.photo2?`<div class='card-photo'><img src='${m.photo2}'/></div>`:``}</div>`:``}
+      <div class="card-footer">
+        <div class="card-footer-actions">
+          <button class="btn xs green" onclick="exportJpg('${m.id}')">↓ QR</button>
+          ${m.photo1?`<button class="btn xs blue" onclick="downloadPhoto('${m.id}',1)">↓ Photo 1</button>`:''}
+          ${m.photo2?`<button class="btn xs blue" onclick="downloadPhoto('${m.id}',2)">↓ Photo 2</button>`:''}
+          ${canEdit ? `
+          <button class="btn xs" onclick="openMerchantModal('${m.id}')">✏️ Modifier</button>
+          ${m.statut!=='autorise'?`<button class="btn xs" onclick="changeStatus('${m.id}','autorise')">Autoriser</button>`:`<button class="btn xs" onclick="changeStatus('${m.id}','suspendu')">Suspendre</button>`}` : ''}
+        </div>
+        <div class="dl-status" id="dl-${m.id}"></div>
+      </div>
+    </div>`).join('')}</div>`;
+}
+async function changeStatus(id, s) {
+  setSyncDot('loading');
+  await sb.from('merchants').update({ statut: s }).eq('id', id);
+  setSyncDot('ok');
+  merchants = merchants.map(m => m.id === id ? {...m, statut: s} : m);
+  renderList();
+}
+async function deleteMerchant(id) {
+  if (!confirm('Supprimer cette fiche ?')) return;
+  setSyncDot('loading');
+  await sb.from('merchants').delete().eq('id', id);
+  setSyncDot('ok');
+  merchants = merchants.filter(m => m.id !== id);
+  renderList();
+}
+
+// ── EXCEL ──
+function exportExcel() {
+  if (!merchants.length) { alert('Aucune fiche.'); return; }
+  const headers = ['ID','Nom commercial','Responsable','SIRET','N° carte','Activité','Téléphone','Ville','Marché','Emplacement','Email','Validité','Statut','Date création','Créé par','Données QR'];
+  const rows = merchants.map(m => [m.id, m.nom_commercial, m.responsable, m.siret, m.numero_carte||'', m.activite||'', m.telephone||'', m.ville||'', m.marche||'', m.emplacement||'', m.email||'', m.validite||'', m.statut==='autorise'?'Autorisé':'Suspendu', fmtDate(m.created_at), m.created_by||'', m.qr_data]);
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([headers, ...rows]);
+  ws['!cols'] = headers.map((_,i) => ({wch: i===0?14:i===15?35:18}));
+  XLSX.utils.book_append_sheet(wb, ws, 'Commerçants');
+  const ws2 = XLSX.utils.aoa_to_sheet([['Stats',''],['Total',merchants.length],['Autorisés',merchants.filter(m=>m.statut==='autorise').length],['Suspendus',merchants.filter(m=>m.statut==='suspendu').length],['Export',new Date().toLocaleDateString('fr-FR')]]);
+  XLSX.utils.book_append_sheet(wb, ws2, 'Stats');
+  XLSX.writeFile(wb, `Commercants_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+// ── CAMERA ──
+async function startCamera() {
+  if (!navigator.mediaDevices?.getUserMedia) { document.getElementById('cam-status').textContent = 'Caméra non disponible.'; return; }
+  try {
+    camStream = await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}}});
+    const vid = document.getElementById('cam-video'); vid.srcObject = camStream;
+    document.getElementById('camera-wrap').style.display = 'block';
+    document.getElementById('btn-start-cam').style.display = 'none';
+    document.getElementById('btn-stop-cam').style.display = 'inline-flex';
+    document.getElementById('cam-status').textContent = '';
+    scanLoop();
+  } catch(e) { document.getElementById('cam-status').textContent = 'Impossible d\'accéder à la caméra : ' + e.message; }
+}
+function stopCamera() {
+  if (camStream) { camStream.getTracks().forEach(t=>t.stop()); camStream = null; }
+  if (camRAF) { cancelAnimationFrame(camRAF); camRAF = null; }
+  const cw = document.getElementById('camera-wrap'); if(cw) cw.style.display='none';
+  const bs = document.getElementById('btn-start-cam'); if(bs) bs.style.display='inline-flex';
+  const bc = document.getElementById('btn-stop-cam'); if(bc) bc.style.display='none';
+}
+function scanLoop() {
+  const vid = document.getElementById('cam-video');
+  if (!camStream) return;
+  if (vid.readyState === vid.HAVE_ENOUGH_DATA) {
+    const cvs = document.createElement('canvas'); cvs.width = vid.videoWidth; cvs.height = vid.videoHeight;
+    cvs.getContext('2d').drawImage(vid, 0, 0);
+    const img = cvs.getContext('2d').getImageData(0, 0, cvs.width, cvs.height);
+    if (typeof jsQR !== 'undefined') {
+      const code = jsQR(img.data, img.width, img.height, {inversionAttempts:'dontInvert'});
+      if (code) { document.getElementById('scan-input').value = code.data; doScan(); stopCamera(); return; }
+    }
+  }
+  camRAF = requestAnimationFrame(scanLoop);
+}
+
+// ── SCAN ──
+function isExpired(dateStr) {
+  if (!dateStr) return false;
+  const today = new Date(); today.setHours(0,0,0,0);
+  const exp = new Date(dateStr); exp.setHours(0,0,0,0);
+  return exp < today;
+}
+function cardStatus(m) {
+  // Carte expirée = non autorisé même si statut OK
+  if (m.statut !== 'autorise') return { ok: false, reason: 'suspendu' };
+  if (m.validite && isExpired(m.validite)) return { ok: false, reason: 'expired' };
+  return { ok: true, reason: 'ok' };
+}
+function doScan() {
+  const raw = document.getElementById('scan-input').value.trim();
+  const area = document.getElementById('scan-result-area');
+  if (!raw) { area.innerHTML = ''; return; }
+  const id = raw.match(/COM-\d+/)?.[0] || raw;
+  const m = merchants.find(x => x.id===id || x.qr_data===raw || x.siret===raw || x.numero_carte===raw);
+  if (!m) {
+    area.innerHTML = `<div class="scan-result"><div class="scan-result-head notfound"><div><div style="font-size:15px;font-weight:700;color:var(--amber-t)">Introuvable</div><div style="font-size:12px;color:var(--amber-t);opacity:.8">Aucune fiche ne correspond.</div></div><span style="font-size:24px">⚠️</span></div></div>`;
+    return;
+  }
+  const status = cardStatus(m);
+  const ok = status.ok;
+  const loc = [m.ville, m.marche].filter(Boolean).join(' — ') || '—';
+  const expiryLabel = m.validite ? (isExpired(m.validite)
+    ? `<span style="color:var(--red-t);font-weight:700">⚠️ Expirée le ${esc(m.validite)}</span>`
+    : `<span style="color:var(--green-t)">${esc(m.validite)}</span>`)
+    : '<span style="color:var(--text-h)">Non renseignée</span>';
+  const statusLabel = status.reason === 'expired'
+    ? '✗ CARTE EXPIRÉE'
+    : ok ? '✓ AUTORISÉ' : '✗ SUSPENDU';
+  const statusBadgeClass = ok ? 'ok' : 'suspended';
+  const headClass = ok ? 'ok' : 'bad';
+  area.innerHTML = `<div class="scan-result">
+    <div class="scan-result-head ${headClass}">
+      <div>
+        <div class="scan-result-name" style="color:${ok?'var(--green-t)':'var(--red-t)'}">${esc(m.nom_commercial||m.responsable)}</div>
+        <div style="font-size:12px;color:${ok?'var(--green-t)':'var(--red-t)'};opacity:.8">${esc(m.responsable)}</div>
+      </div>
+      <span class="badge ${statusBadgeClass}" style="font-size:12px;padding:5px 13px">${statusLabel}</span>
+    </div>
+    ${status.reason==='expired'?`<div style="background:#fff0f0;padding:8px 1.1rem;font-size:12px;font-weight:600;color:var(--red-t);border-bottom:1px solid var(--red-b)">⚠️ La carte de ce commerçant a expiré — accès non autorisé</div>`:''}
+    <div class="scan-result-body">
+      <div class="scan-field"><span>SIRET</span>${esc(m.siret)}</div>
+      <div class="scan-field"><span>N° carte</span>${esc(m.numero_carte||'—')}</div>
+      <div class="scan-field"><span>Activité</span>${esc(m.activite||'—')}</div>
+      <div class="scan-field"><span>Marché</span>${esc(loc)}</div>
+      <div class="scan-field"><span>Emplacement</span>${esc(m.emplacement||'—')}</div>
+      <div class="scan-field"><span>Téléphone</span>${esc(m.telephone||'—')}</div>
+      <div class="scan-field"><span>Email</span>${esc(m.email||'—')}</div>
+      <div class="scan-field"><span>Validité carte</span>${expiryLabel}</div>
+    </div>
+    ${(m.photo1||m.photo2)?`<div style='display:grid;grid-template-columns:1fr 1fr;gap:8px;padding:.9rem 1.1rem;border-top:1px solid #e2e0d8'>${m.photo1?`<img src='${m.photo1}' style='width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px'/>`:``}${m.photo2?`<img src='${m.photo2}' style='width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:8px'/>`:``}</div>`:``}
+  </div>`;
+}
+
+// ── USERS ──
+async function loadUsers() {
+  setSyncDot('loading');
+  const { data } = await sb.from('users').select('*').order('created_at', { ascending: true });
+  users = data || [];
+  setSyncDot('ok');
+  renderUsers();
+}
+function renderUsers() {
+  const c = document.getElementById('users-container');
+  if (!users.length) { c.innerHTML='<p>Aucun utilisateur.</p>'; return; }
+  const roleLabel = r => r==='admin'?'Administrateur':r==='placier'?'Placier':r==='agent_ville'?'Agent Ville':'Lecteur';
+  c.innerHTML = `<div class="users-grid">${users.map(u => {
+    const isMe = u.id === currentUser.id;
+    return `<div class="user-card">
+      <div class="user-card-head">
+        <div class="user-avatar">${initials(u.nom)}</div>
+        <div style="flex:1;min-width:0">
+          <div class="user-name">${esc(u.nom)}${isMe?` <span style="font-size:10px;color:var(--text-h)">(moi)</span>`:''}</div>
+          <div class="user-email">${esc(u.email)}</div>
+          <div class="user-meta">Depuis ${fmtDate(u.created_at)}</div>
+        </div>
+        <span class="user-role-chip role-\${u.role.replace('_','-')}">\${roleLabel(u.role)}</span>
+      </div>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <span class="user-status-chip ${u.status==='active'?'status-active':'status-suspended'}">${u.status==='active'?'Actif':'Suspendu'}</span>
+      </div>
+      <div class="user-actions">
+        <button class="btn xs" onclick="openUserModal('${u.id}')">Modifier</button>
+        ${!isMe?`
+        ${u.status==='active'?`<button class="btn xs danger" onclick="toggleUserStatus('${u.id}','suspended')">Suspendre</button>`:`<button class="btn xs green" onclick="toggleUserStatus('${u.id}','active')">Réactiver</button>`}
+        <button class="btn xs danger" onclick="deleteUser('${u.id}')">Supprimer</button>`:''}
+      </div>
+    </div>`;
+  }).join('')}</div>`;
+}
+async function toggleUserStatus(id, s) {
+  await sb.from('users').update({status: s}).eq('id', id);
+  await loadUsers();
+}
+async function deleteUser(id) {
+  if (!confirm('Supprimer cet utilisateur ?')) return;
+  await sb.from('users').delete().eq('id', id);
+  await loadUsers();
+}
+function openUserModal(id) {
+  editingUserId = id || null;
+  document.getElementById('modal-title-txt').textContent = id ? 'Modifier l\'utilisateur' : 'Ajouter un utilisateur';
+  document.getElementById('modal-err').style.display = 'none';
+  if (id) {
+    const u = users.find(x => x.id === id);
+    if (u) {
+      document.getElementById('mu-nom').value = u.nom;
+      document.getElementById('mu-email').value = u.email;
+      document.getElementById('mu-pass').value = '';
+      document.getElementById('mu-pass').placeholder = 'Laisser vide = inchangé';
+      document.getElementById('mu-role').value = u.role;
+      document.getElementById('mu-status').value = u.status;
+    }
+  } else {
+    ['mu-nom','mu-email','mu-pass'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('mu-pass').placeholder = 'Min. 6 caractères';
+    document.getElementById('mu-role').value = 'placier';
+    document.getElementById('mu-status').value = 'active';
+  }
+  document.getElementById('user-modal').classList.add('open');
+}
+function closeUserModal() { document.getElementById('user-modal').classList.remove('open'); }
+async function saveUser() {
+  const nom = document.getElementById('mu-nom').value.trim();
+  const email = document.getElementById('mu-email').value.trim().toLowerCase();
+  const pass = document.getElementById('mu-pass').value;
+  const role = document.getElementById('mu-role').value;
+  const status = document.getElementById('mu-status').value;
+  const err = document.getElementById('modal-err'); err.style.display = 'none';
+  if (!nom || !email) { err.style.display='flex'; err.textContent='Nom et email requis.'; return; }
+  if (!editingUserId && !pass) { err.style.display='flex'; err.textContent='Mot de passe requis.'; return; }
+  if (pass && pass.length < 6) { err.style.display='flex'; err.textContent='Mot de passe : 6 caractères minimum.'; return; }
+  const upd = editingUserId
+    ? { nom, email, role, status, ...(pass ? {password: pass} : {}) }
+    : { nom, email, password: pass, role, status };
+  const { error } = editingUserId
+    ? await sb.from('users').update(upd).eq('id', editingUserId)
+    : await sb.from('users').insert(upd);
+  if (error) { err.style.display='flex'; err.textContent='Erreur : ' + (error.message.includes('unique')? 'Cet email est déjà utilisé.' : error.message); return; }
+  closeUserModal();
+  await loadUsers();
+}
+
+// ── SETTINGS ──
+function loadSettings() {
+  document.getElementById('set-nom').value = currentUser.nom;
+  document.getElementById('set-email').value = currentUser.email;
+  ['set-pass-old','set-pass-new','set-pass-confirm'].forEach(id => document.getElementById(id).value = '');
+  document.getElementById('settings-msg').style.display = 'none';
+}
+async function saveSettings() {
+  const nom = document.getElementById('set-nom').value.trim();
+  const email = document.getElementById('set-email').value.trim().toLowerCase();
+  const old = document.getElementById('set-pass-old').value;
+  const nw = document.getElementById('set-pass-new').value;
+  const conf = document.getElementById('set-pass-confirm').value;
+  const msg = document.getElementById('settings-msg'); msg.style.display = 'none';
+  if (!nom || !email) { msg.className='alert-box warn'; msg.style.display='flex'; msg.textContent='Nom et email requis.'; return; }
+  let changes = { nom, email };
+  if (old || nw || conf) {
+    if (old !== currentUser.password) { msg.className='alert-box warn'; msg.style.display='flex'; msg.textContent='Mot de passe actuel incorrect.'; return; }
+    if (nw.length < 6) { msg.className='alert-box warn'; msg.style.display='flex'; msg.textContent='Nouveau mot de passe : 6 caractères minimum.'; return; }
+    if (nw !== conf) { msg.className='alert-box warn'; msg.style.display='flex'; msg.textContent='Mots de passe différents.'; return; }
+    changes.password = nw;
+  }
+  const { error } = await sb.from('users').update(changes).eq('id', currentUser.id);
+  if (error) { msg.className='alert-box err'; msg.style.display='flex'; msg.textContent='Erreur : '+error.message; return; }
+  currentUser = { ...currentUser, ...changes };
+  document.getElementById('chip-name').textContent = currentUser.nom.split(' ')[0];
+  msg.className = 'alert-box success'; msg.style.display = 'flex'; msg.textContent = 'Modifications enregistrées.';
+  setTimeout(() => { msg.style.display='none'; }, 3000);
+}
+
+
+
+// ── MERCHANT MODAL ──
+let _mm_photo1 = null, _mm_photo2 = null;
+
+function openMerchantModal(id) {
+  const m = merchants.find(x => x.id === id);
+  if (!m) return;
+  document.getElementById('mm-id').value = m.id;
+  // Split responsable into prenom/nom
+  const parts = (m.responsable||'').split(' ');
+  document.getElementById('mm-prenom').value = parts[0]||'';
+  document.getElementById('mm-resp').value = parts.slice(1).join(' ')||'';
+  document.getElementById('mm-nom').value = m.nom_commercial||'';
+  document.getElementById('mm-siret').value = m.siret||'';
+  document.getElementById('mm-carte').value = m.numero_carte||'';
+  document.getElementById('mm-act').value = m.activite||'';
+  document.getElementById('mm-tel').value = m.telephone||'';
+  document.getElementById('mm-ville').value = m.ville||'';
+  document.getElementById('mm-marche').value = m.marche||'';
+  document.getElementById('mm-empl').value = m.emplacement||'';
+  document.getElementById('mm-email').value = m.email||'';
+  document.getElementById('mm-valid').value = m.validite||'';
+  document.getElementById('mm-statut').value = m.statut||'autorise';
+  document.getElementById('mm-err').style.display='none';
+  // Reset photos
+  _mm_photo1 = m.photo1||null;
+  _mm_photo2 = m.photo2||null;
+  // Show existing photos in slots
+  ['1','2'].forEach(n => {
+    const slot = document.getElementById('mm-slot-'+n);
+    const oldImg = slot.querySelector('img.preview'); if(oldImg) oldImg.remove();
+    const oldDel = slot.querySelector('.photo-delete'); if(oldDel) oldDel.remove();
+    const data = n==='1' ? _mm_photo1 : _mm_photo2;
+    if (data) {
+      const img = document.createElement('img');
+      img.src = data; img.className='preview';
+      img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:1';
+      slot.appendChild(img);
+      const del = document.createElement('button');
+      del.className='photo-delete'; del.innerHTML='✕';
+      del.style.cssText='position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;border:none;cursor:pointer;font-size:14px;z-index:4;display:flex;align-items:center;justify-content:center';
+      const nn = parseInt(n);
+      del.onclick = ev => { ev.stopPropagation(); ev.preventDefault(); clearModalPhoto(nn); };
+      slot.appendChild(del);
+    }
+  });
+  document.getElementById('merchant-modal').classList.add('open');
+}
+
+function closeMerchantModal() {
+  document.getElementById('merchant-modal').classList.remove('open');
+  _mm_photo1 = null; _mm_photo2 = null;
+}
+
+function previewModalPhoto(n, input) {
+  const file = input.files[0]; if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    const tmpImg = new Image();
+    tmpImg.onload = () => {
+      const MAX=1000; let w=tmpImg.width, h=tmpImg.height;
+      if(w>MAX||h>MAX){if(w>h){h=Math.round(h*MAX/w);w=MAX;}else{w=Math.round(w*MAX/h);h=MAX;}}
+      const cvs=document.createElement('canvas'); cvs.width=w; cvs.height=h;
+      cvs.getContext('2d').drawImage(tmpImg,0,0,w,h);
+      const data=cvs.toDataURL('image/jpeg',0.75);
+      if(n===1) _mm_photo1=data; else _mm_photo2=data;
+      const slot=document.getElementById('mm-slot-'+n);
+      const oldImg=slot.querySelector('img.preview'); if(oldImg) oldImg.remove();
+      const oldDel=slot.querySelector('.photo-delete'); if(oldDel) oldDel.remove();
+      const img=document.createElement('img');
+      img.src=data; img.className='preview';
+      img.style.cssText='position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:1';
+      slot.appendChild(img);
+      const del=document.createElement('button');
+      del.className='photo-delete'; del.innerHTML='✕';
+      del.style.cssText='position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;border:none;cursor:pointer;font-size:14px;z-index:4;display:flex;align-items:center;justify-content:center';
+      del.onclick=ev=>{ev.stopPropagation();ev.preventDefault();clearModalPhoto(n);};
+      slot.appendChild(del);
+    };
+    tmpImg.src=e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+
+function clearModalPhoto(n) {
+  if(n===1) _mm_photo1=null; else _mm_photo2=null;
+  const slot=document.getElementById('mm-slot-'+n);
+  const img=slot.querySelector('img.preview'); if(img) img.remove();
+  const del=slot.querySelector('.photo-delete'); if(del) del.remove();
+  document.getElementById('mm-photo'+n).value='';
+}
+
+async function saveMerchant() {
+  const id = document.getElementById('mm-id').value;
+  const prenom = document.getElementById('mm-prenom').value.trim();
+  const resp = document.getElementById('mm-resp').value.trim();
+  const siret = document.getElementById('mm-siret').value.replace(/\D/g,'').slice(0,14);
+  const err = document.getElementById('mm-err'); err.style.display='none';
+  if (!prenom||!resp) { err.style.display='flex'; err.textContent='Prénom et nom du responsable obligatoires.'; return; }
+  if (!/^\d{14}$/.test(siret)) { err.style.display='flex'; err.textContent='Le SIRET doit contenir exactement 14 chiffres.'; return; }
+  const upd = {
+    responsable: (prenom+' '+resp).trim(),
+    nom_commercial: document.getElementById('mm-nom').value.trim()||null,
+    siret,
+    numero_carte: document.getElementById('mm-carte').value.trim()||null,
+    activite: document.getElementById('mm-act').value.trim()||null,
+    telephone: document.getElementById('mm-tel').value.trim()||null,
+    ville: document.getElementById('mm-ville').value.trim()||null,
+    marche: document.getElementById('mm-marche').value.trim()||null,
+    emplacement: document.getElementById('mm-empl').value.trim()||null,
+    email: document.getElementById('mm-email').value.trim()||null,
+    validite: document.getElementById('mm-valid').value||null,
+    statut: document.getElementById('mm-statut').value,
+    photo1: _mm_photo1,
+    photo2: _mm_photo2
+  };
+  setSyncDot('loading');
+  const { error } = await sb.from('merchants').update(upd).eq('id', id);
+  if (error) { setSyncDot('err'); err.style.display='flex'; err.textContent='Erreur : '+error.message; return; }
+  setSyncDot('ok');
+  merchants = merchants.map(m => m.id===id ? {...m,...upd} : m);
+  closeMerchantModal();
+  renderList();
+}
+
+async function deleteMerchantFromModal() {
+  const id = document.getElementById('mm-id').value;
+  if (!confirm('Supprimer définitivement cette fiche ?')) return;
+  setSyncDot('loading');
+  await sb.from('merchants').delete().eq('id', id);
+  setSyncDot('ok');
+  merchants = merchants.filter(m => m.id !== id);
+  closeMerchantModal();
+  renderList();
+}
+
+// ── DOWNLOAD PHOTO ──
+function downloadPhoto(id, n) {
+  const m = merchants.find(x => x.id === id);
+  if (!m) return;
+  const data = n === 1 ? m.photo1 : m.photo2;
+  if (!data) return;
+  const a = document.createElement('a');
+  a.download = `Photo${n}_${m.nom_commercial||m.responsable}_${m.id}.jpg`;
+  a.href = data;
+  a.click();
+}
+
+
+// ── IMPORT EXCEL ──
+let _importRows = [];
+let _importHeaders = [];
+
+function importExcel(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+  showImportResult('info', '⏳ Lecture du fichier…');
+
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      let wb;
+      // Try array buffer first (most reliable for xlsx)
+      try {
+        const data = new Uint8Array(e.target.result);
+        wb = XLSX.read(data, {type:'array', cellDates:true, cellText:false});
+      } catch(e1) {
+        // Fallback: binary string
+        wb = XLSX.read(e.target.result, {type:'binary', cellDates:true});
+      }
+
+      if (!wb || !wb.SheetNames || !wb.SheetNames.length) {
+        showImportResult('err', 'Fichier Excel invalide ou vide.');
+        return;
+      }
+
+      // Use first non-empty sheet
+      let ws = null;
+      for (const name of wb.SheetNames) {
+        const s = wb.Sheets[name];
+        const ref = s['!ref'];
+        if (ref) { ws = s; break; }
+      }
+      if (!ws) { showImportResult('err', 'Aucune feuille de données trouvée.'); return; }
+
+      const data = XLSX.utils.sheet_to_json(ws, {
+        header: 1,
+        defval: '',
+        raw: false,
+        dateNF: 'yyyy-mm-dd'
+      });
+
+      // Filter out completely empty rows
+      const nonEmpty = data.filter(r => Array.isArray(r) && r.some(c => String(c||'').trim() !== ''));
+
+      if (nonEmpty.length < 2) {
+        showImportResult('err', 'Fichier vide ou ne contenant qu\'aucune donnée.');
+        return;
+      }
+
+      _importHeaders = nonEmpty[0].map(h => String(h||'').trim());
+      _importRows = nonEmpty.slice(1).filter(r => r.some(c => String(c||'').trim() !== ''));
+
+      if (_importRows.length === 0) {
+        showImportResult('err', 'Aucune ligne de données trouvée après les en-têtes.');
+        return;
+      }
+
+      document.getElementById('import-result').style.display = 'none';
+      // Show detected columns for user to verify
+      console.log('Headers detected:', _importHeaders);
+      console.log('Rows:', _importRows.length);
+      openImportModal();
+    } catch(err) {
+      showImportResult('err', 'Erreur de lecture : ' + err.message);
+    }
+  };
+  reader.onerror = () => showImportResult('err', 'Impossible de lire le fichier.');
+  reader.readAsArrayBuffer(file);
+}
+
+function openImportModal() {
+  document.getElementById('import-modal-err').style.display = 'none';
+  document.getElementById('import-preview').textContent = `${_importRows.length} ligne(s) détectée(s) · ${_importHeaders.length} colonne(s)`;
+
+  const fields = [
+    {id:'prenom',   label:'Prénom *',              req:true},
+    {id:'nom_resp', label:'Nom *',                  req:true},
+    {id:'nom_comm', label:'Nom commercial',         req:false},
+    {id:'siret',    label:'SIRET',                  req:false},
+    {id:'carte',    label:'N° carte',               req:false},
+    {id:'activite', label:'Activité',               req:false},
+    {id:'tel',      label:'Téléphone',              req:false},
+    {id:'ville',    label:'Ville',                  req:false},
+    {id:'marche',   label:'Marché',                 req:false},
+    {id:'empl',     label:'Emplacement',            req:false},
+    {id:'email',    label:'Email',                  req:false},
+    {id:'validite', label:'Validité de la carte',   req:false},
+  ];
+
+  // Auto-detect column mapping
+  const autoMap = {};
+  const keywords = {
+    prenom:   ['prénom','prenom','firstname','first','given'],
+    nom_resp: ['nom','name','lastname','last','surname','responsable','resp'],
+    nom_comm: ['commercial','entreprise','société','enseigne','raison','shop','company','nom comm'],
+    siret:    ['siret','siren'],
+    carte:    ['carte','card','numéro carte','num carte','numero carte'],
+    activite: ['activité','activite','activity','métier','metier'],
+    tel:      ['téléphone','telephone','tel','phone','mobile'],
+    ville:    ['ville','city','commune'],
+    marche:   ['marché','marche','market'],
+    empl:     ['emplacement','stand','empl','allée','allee'],
+    email:    ['email','mail','courriel','e-mail'],
+    validite: ['validité','validite','valid','expir','date'],
+  };
+  _importHeaders.forEach((h, i) => {
+    const hl = h.toLowerCase().replace(/[^a-zéèàêî]/g,'');
+    for (const [fid, kws] of Object.entries(keywords)) {
+      if (!autoMap[fid] && kws.some(k => hl.includes(k.replace(/[^a-zéèàêî]/g,'')))) {
+        autoMap[fid] = i;
+      }
+    }
+  });
+
+  const opts = `<option value="">— Ne pas importer —</option>` +
+    _importHeaders.map((h,i) => `<option value="${i}">${h||'Colonne '+(i+1)}</option>`).join('');
+
+  document.getElementById('import-mapping').innerHTML = fields.map(f => `
+    <div class="grid2" style="margin-bottom:8px;align-items:center">
+      <div style="font-size:12px;font-weight:600;color:${f.req?'var(--text)':'var(--text-s)'}">${f.label}</div>
+      <select id="map-${f.id}" style="padding:7px 10px;font-size:13px;border:1px solid var(--border);border-radius:var(--r);background:var(--surface);font-family:inherit;width:100%">
+        ${opts}
+      </select>
+    </div>
+  `).join('');
+
+  // Apply auto-detected mappings
+  for (const [fid, colIdx] of Object.entries(autoMap)) {
+    const sel = document.getElementById('map-'+fid);
+    if (sel) sel.value = colIdx;
+  }
+
+  document.getElementById('import-modal').classList.add('open');
+}
+
+function closeImportModal() {
+  document.getElementById('import-modal').classList.remove('open');
+  _importRows = []; _importHeaders = [];
+}
+
+function getCol(row, selId) {
+  const sel = document.getElementById('map-'+selId);
+  if (!sel || sel.value === '') return '';
+  const val = row[parseInt(sel.value)];
+  if (val === null || val === undefined) return '';
+  // Handle Date objects (Excel dates parsed by SheetJS)
+  if (val instanceof Date) {
+    const y = val.getFullYear();
+    const m = String(val.getMonth()+1).padStart(2,'0');
+    const d = String(val.getDate()).padStart(2,'0');
+    return y+'-'+m+'-'+d;
+  }
+  // Strip time part from date strings like "2028-05-12 00:00:00"
+  const s = String(val).trim();
+  if (/^\d{4}-\d{2}-\d{2}\s/.test(s)) return s.slice(0,10);
+  return s;
+}
+
+async function confirmImport() {
+  const err = document.getElementById('import-modal-err');
+  err.style.display = 'none';
+  const prenomIdx = document.getElementById('map-prenom').value;
+  const nomIdx = document.getElementById('map-nom_resp').value;
+  if (prenomIdx==='' || nomIdx==='') {
+    err.style.display='flex'; err.textContent='Veuillez associer Prénom et Nom.';
+    return;
+  }
+  const btn = document.getElementById('import-confirm-btn');
+  btn.disabled = true; btn.textContent = 'Importation…';
+  setSyncDot('loading');
+
+  const toInsert = [];
+  const skipped = [];
+
+  for (const row of _importRows) {
+    const prenom = getCol(row,'prenom');
+    const nom_resp = getCol(row,'nom_resp');
+    if (!prenom && !nom_resp) { skipped.push(row); continue; }
+    // SIRET: pad to 14 digits if shorter, use default if empty
+    const siretRaw = getCol(row,'siret').replace(/\D/g,'');
+    const siret = siretRaw.length > 0 ? siretRaw.padEnd(14,'0').slice(0,14) : '00000000000000';
+    const id = makeId();
+    const qrData = 'MARCHE:'+id+'|SIRET:'+siret;
+    // Clean validite date - strip time part
+    let validite = getCol(row,'validite');
+    if (validite && validite.includes(' ')) validite = validite.split(' ')[0];
+    if (validite && !/^\d{4}-\d{2}-\d{2}$/.test(validite)) validite = null;
+    // Only include columns that exist in Supabase schema
+    toInsert.push({
+      id,
+      qr_data: qrData,
+      responsable: (prenom+' '+nom_resp).trim(),
+      nom_commercial: getCol(row,'nom_comm')||null,
+      siret,
+      numero_carte: getCol(row,'carte')||null,
+      activite: getCol(row,'activite')||null,
+      telephone: getCol(row,'tel')||null,
+      ville: getCol(row,'ville')||null,
+      marche: getCol(row,'marche')||null,
+      emplacement: getCol(row,'empl')||null,
+      email: getCol(row,'email')||null,
+      validite: validite||null,
+      statut: 'autorise',
+      created_by: currentUser.nom
+    });
+  }
+
+  if (!toInsert.length) {
+    err.style.display='flex'; err.textContent='Aucune ligne valide à importer (Prénom et Nom requis).';
+    btn.disabled=false; btn.textContent='Importer';
+    return;
+  }
+
+  // Check existing SIRET in DB to avoid duplicates
+  const { data: existingData } = await sb.from('merchants').select('siret');
+  const existingSirets = new Set((existingData||[]).map(r => r.siret));
+
+  // Filter out duplicates already in DB
+  const filtered = toInsert.filter(row => {
+    if (existingSirets.has(row.siret) && row.siret !== '00000000000000') {
+      skipped.push(row);
+      return false;
+    }
+    return true;
+  });
+
+  if (!filtered.length) {
+    err.style.display='flex';
+    err.textContent = 'Toutes les lignes existent déjà en base (SIRET en double). Aucune fiche ajoutée.';
+    btn.disabled=false; btn.textContent='Importer';
+    setSyncDot('ok');
+    return;
+  }
+
+  // Insert one by one to identify which rows fail
+  let inserted = 0;
+  let errors = [];
+  for (const row of filtered) {
+    const { error } = await sb.from('merchants').insert(row);
+    if (error) errors.push(error.message);
+    else inserted++;
+  }
+
+  setSyncDot(inserted > 0 ? 'ok' : 'err');
+
+  if (inserted === 0) {
+    err.style.display='flex';
+    err.textContent = 'Échec : ' + (errors[0]||'erreur inconnue');
+    btn.disabled=false; btn.textContent='Importer';
+    return;
+  }
+
+  closeImportModal();
+  await loadMerchants();
+  let msg = '✓ '+inserted+' fiche(s) importée(s) !';
+  if (skipped.length) msg += ' · '+skipped.length+' doublon(s) ignoré(s)';
+  if (errors.length) msg += ' · '+errors.length+' erreur(s)';
+  showImportResult('success', msg);
+  btn.disabled=false; btn.textContent='Importer';
+}
+
+function showImportResult(type, msg) {
+  const el = document.getElementById('import-result');
+  el.className = 'alert-box ' + (type==='success'?'success':type==='info'?'info':'err');
+  el.textContent = msg;
+  el.style.display = 'flex';
+  if (type==='success') setTimeout(()=>{el.style.display='none'},6000);
+}
+
+// ── EXPORT JPG ──
+function exportJpg(id) {
+  const m = merchants.find(x => x.id === id); if (!m) return;
+  const statusEl = document.getElementById('dl-' + id);
+  if (statusEl) { statusEl.textContent = '…'; statusEl.style.color = 'var(--text-s)'; }
+  const QR=300, W=360, H=420;
+  const cvs = document.getElementById('export-canvas'); cvs.width=W; cvs.height=H;
+  const ctx = cvs.getContext('2d');
+  const img = new Image(); img.crossOrigin = 'anonymous';
+  img.src = qrUrl(m.qr_data, QR*2);
+  img.onload = () => {
+    ctx.fillStyle = '#ffffff'; ctx.fillRect(0,0,W,H);
+    ctx.drawImage(img, (W-QR)/2, 36, QR, QR);
+    ctx.fillStyle = '#1a1916'; ctx.textAlign = 'center';
+    ctx.font = 'bold 18px -apple-system,Helvetica Neue,Arial,sans-serif';
+    const name = m.nom_commercial, maxW = W-32;
+    if (ctx.measureText(name).width > maxW) {
+      const words = name.split(' '); let l1='', l2='';
+      for (const w of words) { if(ctx.measureText(l1+' '+w).width<maxW) l1=(l1+' '+w).trim(); else l2=(l2+' '+w).trim(); }
+      ctx.fillText(l1, W/2, 36+QR+36); if(l2) ctx.fillText(l2, W/2, 36+QR+58);
+    } else ctx.fillText(name, W/2, 36+QR+40);
+    ctx.font='11px -apple-system,Helvetica Neue,Arial,sans-serif'; ctx.fillStyle='#a09e99';
+    ctx.fillText(m.id, W/2, H-14); ctx.textAlign='left';
+    const a = document.createElement('a');
+    a.download = `QR_${m.id}_${m.nom_commercial.replace(/[^a-z0-9]/gi,'_')}.jpg`;
+    a.href = cvs.toDataURL('image/jpeg', .96); a.click();
+    if (statusEl) { statusEl.textContent='✓'; statusEl.style.color='var(--green-t)'; setTimeout(()=>{statusEl.textContent=''},2000); }
+  };
+}
+async function exportAllJpg() {
+  if (!merchants.length) { alert('Aucune fiche.'); return; }
+  const btn = document.getElementById('export-all-btn'); btn.disabled=true; btn.textContent='En cours…';
+  for (const m of merchants) { exportJpg(m.id); await new Promise(r=>setTimeout(r,700)); }
+  btn.textContent='↓ Tous QR JPG'; btn.disabled=false;
+}
+
+
+// ── PHOTOS ──
+window._photo1 = null;
+window._photo2 = null;
+function previewPhoto(n, input) {
+  const file = input.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    // Compress image via canvas
+    const tmpImg = new Image();
+    tmpImg.onload = () => {
+      const MAX = 1000;
+      let w = tmpImg.width, h = tmpImg.height;
+      if (w > MAX || h > MAX) {
+        if (w > h) { h = Math.round(h * MAX / w); w = MAX; }
+        else { w = Math.round(w * MAX / h); h = MAX; }
+      }
+      const cvs = document.createElement('canvas');
+      cvs.width = w; cvs.height = h;
+      cvs.getContext('2d').drawImage(tmpImg, 0, 0, w, h);
+      const data = cvs.toDataURL('image/jpeg', 0.75);
+      if (n===1) window._photo1 = data;
+      else window._photo2 = data;
+      const slot = document.getElementById('slot-'+n);
+      const oldImg = slot.querySelector('img.preview'); if(oldImg) oldImg.remove();
+      const oldDel = slot.querySelector('.photo-delete'); if(oldDel) oldDel.remove();
+      const img = document.createElement('img');
+      img.src = data; img.className = 'preview';
+      img.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;object-fit:cover;border-radius:10px;z-index:1';
+      slot.appendChild(img);
+      const del = document.createElement('button');
+      del.className = 'photo-delete'; del.innerHTML = '✕';
+      del.style.cssText = 'position:absolute;top:6px;right:6px;width:26px;height:26px;border-radius:50%;background:rgba(0,0,0,.65);color:#fff;border:none;cursor:pointer;font-size:14px;z-index:4;display:flex;align-items:center;justify-content:center';
+      del.onclick = ev => { ev.stopPropagation(); ev.preventDefault(); clearPhoto(n); };
+      slot.appendChild(del);
+    };
+    tmpImg.src = e.target.result;
+  };
+  reader.readAsDataURL(file);
+}
+function clearPhoto(n) {
+  if (n===1) window._photo1=null; else window._photo2=null;
+  const slot = document.getElementById('slot-'+n);
+  const img = slot.querySelector('img.preview'); if(img) img.remove();
+  const del = slot.querySelector('.photo-delete'); if(del) del.remove();
+  document.getElementById('f-photo'+n).value='';
+}
+
+// ── START ──
+bootstrap();
+</script>
+</body>
+</html>
